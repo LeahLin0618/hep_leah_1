@@ -1,0 +1,83 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# ----------------------------- 前半段 -----------------------------
+# Filepath for the data
+file_path = "/home/leah/Downloads/blackhawk_v2.3/results/test_no_MBE/life_evolutions.txt"
+
+# Reading the data, skipping the header lines
+data = np.genfromtxt(file_path, skip_header=3, invalid_raise=False)  # Skips the first 3 lines
+
+# Extracting time (t) and mass (M) columns
+time = data[:, 0]  # First column is time
+mass = data[:, 1]  # Second column is mass
+
+# Numerical differentiation to find dM/dt
+dt = np.diff(time)  # Time step differences
+dM = np.diff(mass)  # Mass differences
+dM_dt = dM / dt  # Rate of change of mass
+
+# To align the dM/dt with the time vector, take the average time between two points
+time_mid = (time[:-1] + time[1:]) / 2  # Midpoints of the time intervals
+
+# Identify point where M_MBE = 1/2 * initial mass (optional visualization)
+M_half = 0.5 * mass[0]
+index_half = np.where(mass <= M_half)[0][0] if (mass <= M_half).any() else -1
+
+# Plotting t vs M
+plt.figure(figsize=(8, 6))
+plt.plot(time, mass, label="Black Hole Mass", color="blue", lw=2)
+if index_half != -1:
+    plt.axvline(time[index_half], color="green", linestyle="--", label=f"M_MBE = 1/2 M_initial at t={time[index_half]:.2e}")
+plt.xlabel("Time (s)", fontsize=12)
+plt.ylabel("Mass (M\u2609)", fontsize=12)
+plt.title("Time Evolution of Black Hole Mass", fontsize=14)
+plt.grid(True)
+plt.legend()
+
+# # Plotting the rate of change dM/dt
+# plt.twinx()  # Create a second y-axis
+# plt.plot(time_mid, dM_dt, label="dM/dt", color="red", lw=2, linestyle="--")
+# plt.ylabel("dM/dt (M\u2609/s)", fontsize=12)
+# plt.legend(loc="upper left")
+
+# plt.tight_layout()
+# plt.show()
+
+# ----------------------------- 後半段 -----------------------------
+# Constants
+G = 1 / (1.22e19)**2
+g_sm = 102.6
+M_P = (8 * np.pi * G)**(-0.5)
+
+# Logarithmic time array (scaled to GeV, factor 6.58e-25)
+t = np.logspace(1, 17, 1000) * 6.58e-25  # Converted to GeV
+
+# Correct M_MBE_evolve to handle invalid values gracefully
+def M_MBE_evolve(t, tau_PBH, Gamma_PBH_k, M_MBE, k, q=0.5):  # q is an arbitrary small constant
+    factor = 1 - Gamma_PBH_k * (t - tau_PBH * (1 - q**3))
+    factor = np.maximum(factor, 1e-10)  # Avoid non-positive values
+    return M_MBE * (factor**(1 / (3 + 2 * k)))
+
+# Initial parameters and plot setup
+M_MBE_initial = 1e9  # Arbitrary initial mass of MBE in grams
+k_values = [1, 2, 4]
+
+plt.figure(figsize=(10, 6))
+for k in k_values:
+    Gamma_k = Gamma_PBH(k, M_MBE_initial)
+    tau_k = tau_PBH(k, M_MBE_initial)
+    M_MBE_values = M_MBE_evolve(t, tau_k, Gamma_k, M_MBE_initial, k)
+    valid_indices = M_MBE_values > 0  # Filter valid values for plotting
+    plt.plot(t[valid_indices], M_MBE_values[valid_indices], label=f"k={k}")
+
+# Plot details
+plt.xlabel("Time (GeV^{-1})")
+plt.ylabel("M_MBE (grams)")
+plt.xscale("log")
+plt.yscale("log")
+plt.title("Evolution of M_MBE vs Time for Different k Values")
+plt.legend()
+plt.grid()
+plt.show()
+
